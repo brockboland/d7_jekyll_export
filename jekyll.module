@@ -1,0 +1,102 @@
+<?php
+
+
+/**
+ * Implements hook_menu().
+ */
+function jekyll_menu() {
+  $items['jekyll/export'] = array(
+    'title' => 'Jekyll Export',
+    'page callback' => 'jekyll_export',
+    'access callback' => TRUE,
+    'type' => MENU_CALLBACK,
+  );
+  return $items;
+}
+
+function jekyll_export() {
+  $category_sql = "SELECT nterm.entity_id nid, cat.name
+    FROM field_data_taxonomy_vocabulary_1 nterm
+    LEFT JOIN taxonomy_term_data cat ON cat.tid = nterm.taxonomy_vocabulary_1_tid
+    WHERE nterm.bundle = 'post' AND nterm.entity_type = 'node'";
+  $result = db_query($category_sql);
+  $cat_holder = $result->fetchAll();
+  $categories = array();
+  foreach ($cat_holder as $c) {
+    $categories[$c->nid][] = $c->name;
+  }
+  
+  $tag_sql = "SELECT nterm.entity_id nid, tag.name
+    FROM field_data_taxonomy_vocabulary_2 nterm
+    LEFT JOIN taxonomy_term_data tag ON tag.tid = nterm.taxonomy_vocabulary_2_tid
+    WHERE nterm.bundle = 'post' AND nterm.entity_type = 'node'";
+  $result = db_query($tag_sql);
+  $tag_holder = $result->fetchAll();
+  $tags = array();
+  foreach ($tag_holder as $c) {
+    $tags[$c->nid][] = $c->name;
+  }
+  
+  
+  $output = '';
+  $sql = "SELECT n.nid, n.title, n.status, u.alias, b.body_value as body
+    FROM {node} n
+    LEFT JOIN {url_alias} u ON u.source = concat('node/', n.nid)
+    LEFT JOIN field_data_body b ON b.entity_id = n.nid AND b.entity_type='node' AND b.revision_id = n.vid
+    WHERE n.type = 'post'";
+  
+  $result = db_query($sql);
+    
+  $counter = 0;
+  foreach ($result as $record) {
+    $nid = $record->nid;
+    // Limit control
+    $counter++;
+    if ($counter > 10) break;
+
+    // Check if published
+    if($record->status > 0) $dir = '_posts';
+    else $dir = '_drafts';
+    
+    // Grab the title, body, and prep for taxonomy terms
+    $title = $record->title;
+    $body = $record->body;
+    $categories = array();
+    $tags = array();
+    $path = $record->alias;
+
+
+    // Load the node
+    $node = node_load($nid);
+    dsm($record);
+    
+    
+    // Category
+    if (!empty($node->taxonomy_vocabulary_1)) {
+      foreach ($node->taxonomy_vocabulary_1['und'] as $t) {
+        if ($t['tid'] > 0) {
+          if (!isset($terms[$t['tid']])) {
+            $term = taxonomy_term_load($t['tid']);
+            $terms[$t['tid']] = $term->name;
+          }
+          $categories[] = $terms[$t['tid']];
+        }
+      }
+    }
+    // Tags
+    if (!empty($node->taxonomy_vocabulary_2)) {
+      foreach ($node->taxonomy_vocabulary_2['und'] as $t) {
+        if ($t['tid'] > 0) {
+          if (!isset($terms[$t['tid']])) {
+            $term = taxonomy_term_load($t['tid']);
+            $terms[$t['tid']] = $term->name;
+          }
+          $tags[] = $terms[$t['tid']];
+        }
+      }
+    }
+
+    $output .= "$nid: $title. Categories: (" . implode($categories, ',') . ", tags: (" . implode($tags, ',') . "). Path: $path. Dir: $dir<br>";
+  }
+  return $output;
+}
