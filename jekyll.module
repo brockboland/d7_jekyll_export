@@ -37,9 +37,14 @@ function jekyll_export() {
     $tags[$c->nid][] = $c->name;
   }
   
+  // Prep dirs
+  drupal_rmdir('temporary://_posts');
+  drupal_mkdir('temporary://_posts');
+  drupal_rmdir('temporary://_drafts');
+  drupal_mkdir('temporary://_drafts');
   
   $output = '';
-  $sql = "SELECT n.nid, n.title, n.status, u.alias, b.body_value as body
+  $sql = "SELECT n.nid, n.title, n.status, n.created, u.alias, b.body_value as body
     FROM {node} n
     LEFT JOIN {url_alias} u ON u.source = concat('node/', n.nid)
     LEFT JOIN field_data_body b ON b.entity_id = n.nid AND b.entity_type='node' AND b.revision_id = n.vid
@@ -52,7 +57,7 @@ function jekyll_export() {
     $nid = $record->nid;
     // Limit control
     $counter++;
-    if ($counter > 10) break;
+    //if ($counter > 10) break;
 
     // Check if published
     if($record->status > 0) $dir = '_posts';
@@ -61,42 +66,41 @@ function jekyll_export() {
     // Grab the title, body, and prep for taxonomy terms
     $title = $record->title;
     $body = $record->body;
-    $categories = array();
-    $tags = array();
-    $path = $record->alias;
+    $url_path = $record->alias;
+    $filedate = date('Y-m-d', $record->created);
+    $nicedate = date('Y-m-d G:i', $record->created);
 
-
-    // Load the node
-    $node = node_load($nid);
-    dsm($record);
+    $filename = strtolower(trim($title));
+    $filename = preg_replace('/(&|&amp;)/', ' and ', $filename);
+    $filename = preg_replace('/[\s\.\/]/', '-', $filename);
+    $filename = preg_replace('/[^\w-]/', '', $filename);
+    $filename = preg_replace('/[-_]{2,}/', '-', $filename);
+    $filename = preg_replace('/^[-_]/', '', $filename);
+    $filename = preg_replace('/[-_]$/', '', $filename);
+    $filename = $filedate . '-' . $filename . '.md';
     
-    
-    // Category
-    if (!empty($node->taxonomy_vocabulary_1)) {
-      foreach ($node->taxonomy_vocabulary_1['und'] as $t) {
-        if ($t['tid'] > 0) {
-          if (!isset($terms[$t['tid']])) {
-            $term = taxonomy_term_load($t['tid']);
-            $terms[$t['tid']] = $term->name;
-          }
-          $categories[] = $terms[$t['tid']];
-        }
-      }
-    }
-    // Tags
-    if (!empty($node->taxonomy_vocabulary_2)) {
-      foreach ($node->taxonomy_vocabulary_2['und'] as $t) {
-        if ($t['tid'] > 0) {
-          if (!isset($terms[$t['tid']])) {
-            $term = taxonomy_term_load($t['tid']);
-            $terms[$t['tid']] = $term->name;
-          }
-          $tags[] = $terms[$t['tid']];
-        }
-      }
-    }
 
-    $output .= "$nid: $title. Categories: (" . implode($categories, ',') . ", tags: (" . implode($tags, ',') . "). Path: $path. Dir: $dir<br>";
+
+    $output .= "$nid: $title. Categories: (" . implode($categories[$nid], ',') . "), tags: (" . implode($tags[$nid], ',') . "). Path: $url_path. Dir: $dir. Filename: $filename<br>";
+    
+    $uri = 'temporary://' . $dir . '/' . $filename;
+    
+    $data = "---
+layout: post
+title: \"" . str_replace('"', '\"', $title) . "\"
+date: $nicedate
+comments: false
+sharing: true
+footer: true
+permalink: $url_path
+categories: [" . implode($categories[$nid], ', ') . "]
+tags: [" . implode($tags[$nid], ', ') . "]
+---
+$body";
+
+    if (file_put_contents($uri, $data) === FALSE) {
+      drupal_set_message('Failed to write to ' . $uri, 'error');
+    }
   }
   return $output;
 }
