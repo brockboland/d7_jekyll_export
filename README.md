@@ -1,1 +1,3 @@
-Super-hacky module to export blog posts into a Jekyll blog.
+This module probably won't work on your site, but if you enable it and navigate to `jekyll/export`, it will loop over all nodes of type `post`, try to connect them to taxonomy terms from vocabularies 1 and 2, and output the resulting Jekyll-compatible files into `_posts` and `_drafts` directories in your temporary file directory (which may be `/tmp` or `sites/default/files/tmp` or something else, depending on how you configured Drupal in the File System settings).
+
+If you want to make use of this module, please fork it and tweak to suit. I wrote this quickly to serve my purposes, but hate the idea of just keeping code to myself. Feel free to submit pull requests if you want to do some cleanup on it. Ultimately, I'd love to see this become a module that works with [Backup and Migrate](http://drupal.org/project/backup_migrate), but I don't have to time to do a proper integration with it.
